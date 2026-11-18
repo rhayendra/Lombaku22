@@ -110,7 +110,7 @@ def _open_raw_connection() -> DBConnection:
         if "sslmode=" not in dsn:
             sep = "&" if "?" in dsn else "?"
             dsn = f"{dsn}{sep}sslmode=require"
-        conn = psycopg2.connect(dsn)
+        conn = psycopg2.connect(dsn, connect_timeout=8)
         return DBConnection(conn, is_postgres=True)
 
     conn = sqlite3.connect(Config.DATABASE_PATH)
