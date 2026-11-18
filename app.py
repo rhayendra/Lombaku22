@@ -4,6 +4,7 @@ Dapat dijalankan langsung di komputer lokal (`python app.py`)
 maupun sebagai Serverless Function di Vercel (melalui `api/index.py`).
 """
 import os
+from urllib.parse import parse_qsl, urlencode
 from flask import Flask, render_template, session, jsonify, request
 from config import Config, BASE_DIR
 from database.db import init_db, close_db, get_db
@@ -14,6 +15,36 @@ from routes.api import api_bp
 from services.events import get_settings
 
 _db_initialized = False
+
+
+class _VercelRewriteFixMiddleware:
+    """Pengaman tambahan: jika request datang lewat rewrite `/api/index`, pulihkan ke path asli."""
+
+    def __init__(self, wsgi_app):
+        self.wsgi_app = wsgi_app
+
+    def __call__(self, environ, start_response):
+        path = environ.get("PATH_INFO", "/")
+        raw_qs = environ.get("QUERY_STRING", "")
+        qs_pairs = parse_qsl(raw_qs, keep_blank_values=True)
+        vpath = None
+        cleaned = []
+        for k, v in qs_pairs:
+            if k == "__vpath" and vpath is None:
+                vpath = v
+            else:
+                cleaned.append((k, v))
+        if vpath is not None:
+            environ["QUERY_STRING"] = urlencode(cleaned, doseq=True)
+        if path in ("/api/index", "/api/index.py") or path.startswith("/api/index/"):
+            restored = vpath or environ.get("HTTP_X_VERCEL_ORIGINAL_PATH") or environ.get("HTTP_X_FORWARDED_URI") or "/"
+            restored = restored.split("?", 1)[0]
+            if not restored.startswith("/"):
+                restored = "/" + restored
+            while restored.startswith("//"):
+                restored = restored[1:]
+            environ["PATH_INFO"] = restored or "/"
+        return self.wsgi_app(environ, start_response)
 
 
 def ensure_database_ready():
@@ -155,6 +186,7 @@ def create_app() -> Flask:
             500,
         )
 
+    app.wsgi_app = _VercelRewriteFixMiddleware(app.wsgi_app)
     return app
 
 

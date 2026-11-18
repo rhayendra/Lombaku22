@@ -1,12 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "fluid": true,
   "functions": {
-    "api/index.py": {
-      "maxDuration": 30,
-      "includeFiles": "{templates/**,static/**,database/**,routes/**,services/**}"
+    "app.py": {
+      "maxDuration": 30
     }
-  },
-  "rewrites": [
-    { "source": "/((?!static/).*)", "destination": "/api/index?__vpath=/$1" }
-  ]
+  }
 }
