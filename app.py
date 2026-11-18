@@ -77,21 +77,27 @@ def create_app() -> Flask:
     @app.before_request
     def _ensure_db_before_request():
         # Lewati pengecekan DB untuk file static dan endpoint /health
-        if request.path.startswith("/static/") or request.path == "/health":
+        if request.endpoint in ("static", "health_check") or request.path.startswith("/static/") or request.path == "/health":
             return None
         try:
             ensure_database_ready()
         except Exception as exc:
             engine = "Supabase PostgreSQL" if Config.USE_POSTGRES else "SQLite"
+            err_text = str(exc)
+            extra_hint = ""
+            if "Cannot assign requested address" in err_text or (".supabase.co" in err_text and "pooler." not in err_text):
+                extra_hint = (
+                    " Anda sedang memakai Direct Connection (IPv6, db.xxxx.supabase.co:5432) yang tidak didukung Vercel. "
+                    "Buka Supabase -> Connect -> pilih Method: Transaction Pooler (host ...pooler.supabase.com:6543), "
+                    "lalu update DATABASE_URL di Vercel dan Redeploy."
+                )
             return (
                 render_template(
                     "error.html",
                     code=503,
                     title=f"Koneksi Database ({engine}) Belum Tersambung",
                     message=(
-                        f"Detail: {exc}. "
-                        "Jika deploy di Vercel + Supabase, pastikan Environment Variable DATABASE_URL "
-                        "menggunakan URL Transaction Pooler (port 6543) dan password database sudah benar."
+                        f"Detail: {err_text}.{extra_hint or ' Pastikan DATABASE_URL dan password Supabase sudah benar.'}"
                     ),
                 ),
                 503,
